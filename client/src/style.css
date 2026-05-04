@@ -134,8 +134,14 @@ header h1 {
 .chart-card {
   background: #fff;
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.chart-card canvas {
+  max-height: 250px !important;
 }
 
 .chart-card h3 {
