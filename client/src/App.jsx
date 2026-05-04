@@ -216,9 +216,9 @@ export default function App() {
       )}
 
       {stats?.suggestions?.length > 0 && (
-        <div className="chart-card" style={{ marginTop: 24 }}>
-          <h3>💬 建議回饋</h3>
-          <div style={{ marginTop: 12 }}>
+        <div className="chart-card" style={{ marginTop: 24, maxHeight: 300, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ flexShrink: 0 }}>💬 建議回饋</h3>
+          <div style={{ marginTop: 8, overflowY: 'auto', fontSize: '0.85rem' }}>
             {stats.suggestions.map((s, i) => (
               <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
