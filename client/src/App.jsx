@@ -236,8 +236,8 @@ export default function App() {
         const extraFields = [...new Set(stats.extras.map(e => e.field))];
         const filtered = selectedExtraField ? stats.extras.filter(e => e.field === selectedExtraField) : stats.extras;
         return (
-          <div className="chart-card" style={{ marginTop: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div className="chart-card" style={{ marginTop: 24, maxHeight: 350, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 8, flexShrink: 0 }}>
               <h3 style={{ margin: 0 }}>📝 其他回饋</h3>
               <select
                 value={selectedExtraField}
@@ -249,9 +249,9 @@ export default function App() {
               </select>
               <span style={{ color: '#6d6e71', fontSize: '0.85rem' }}>{filtered.length} 筆</span>
             </div>
-            <div>
+            <div style={{ overflowY: 'auto', fontSize: '0.85rem' }}>
               {filtered.map((e, i) => (
-                <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'baseline' }}>
                   <span style={{ color: '#6d6e71', fontSize: '0.85rem', minWidth: 70, flexShrink: 0 }}>{e.name}</span>
                   {!selectedExtraField && <span style={{ background: '#eef2d0', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', color: '#a8ba20', flexShrink: 0 }}>{shortLabel(e.field)}</span>}
                   <span style={{ fontWeight: 500 }}>{e.value}</span>
