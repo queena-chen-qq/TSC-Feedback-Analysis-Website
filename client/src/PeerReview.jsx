@@ -26,17 +26,40 @@ function parseMultiSheetExcel(file) {
         const rawName = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
         const group = detectGroup(rawName);
 
-        // Parse overview sheet (first sheet)
-        const overviewSheet = wb.Sheets[wb.SheetNames[0]];
-        const overviewRows = XLSX.utils.sheet_to_json(overviewSheet);
-        const overview = [];
-        if (overviewRows.length > 0) {
-          const headers = Object.keys(overviewRows[0]);
-          const nameCol = headers.find(h => h.includes('姓名') || h.includes('組員')) || headers[0];
-          const sessionCols = headers.filter(h => h.includes('堂') || h.includes('月'));
-          const avgCol = headers.find(h => h.includes('總平均') || h.includes('平均')) || '';
+        // Helper: find the header row (the one containing '組員姓名' or '評分者')
+        function findDataRows(sheet, keyword) {
+          const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          let headerIdx = -1;
+          for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+            const row = allRows[i];
+            if (row && row.some(cell => String(cell ?? '').includes(keyword))) {
+              headerIdx = i;
+              break;
+            }
+          }
+          if (headerIdx === -1) return { headers: [], rows: [] };
+          const headers = allRows[headerIdx].map(h => String(h ?? '').trim());
+          const rows = [];
+          for (let i = headerIdx + 1; i < allRows.length; i++) {
+            const r = allRows[i];
+            if (!r || r.every(c => c === undefined || c === null || String(c).trim() === '')) continue;
+            const obj = {};
+            headers.forEach((h, ci) => { if (h) obj[h] = r[ci]; });
+            rows.push(obj);
+          }
+          return { headers, rows };
+        }
 
-          overviewRows.forEach(row => {
+        // Parse overview sheet
+        const overviewSheet = wb.Sheets[wb.SheetNames[0]];
+        const { headers: ovHeaders, rows: ovRows } = findDataRows(overviewSheet, '組員姓名');
+        const overview = [];
+        if (ovRows.length > 0) {
+          const nameCol = ovHeaders.find(h => h.includes('姓名')) || ovHeaders[0];
+          const sessionCols = ovHeaders.filter(h => h.includes('堂') || (h.includes('月') && h.includes('日')));
+          const avgCol = ovHeaders.find(h => h.includes('總平均')) || '';
+
+          ovRows.forEach(row => {
             const name = String(row[nameCol] ?? '').trim();
             if (!name) return;
             const sessions = {};
@@ -53,24 +76,23 @@ function parseMultiSheetExcel(file) {
         const sessions = [];
         for (let i = 1; i < wb.SheetNames.length; i++) {
           const sheetName = wb.SheetNames[i];
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+          const sheet = wb.Sheets[sheetName];
+          const { headers, rows } = findDataRows(sheet, '評分者');
           if (rows.length === 0) continue;
 
-          const headers = Object.keys(rows[0]);
           const raterCol = headers.find(h => h.includes('評分者')) || headers[0];
           const commentCol = headers.find(h => h.includes('留言') || h.includes('想對') || h.includes('說的話')) || '';
-          const memberCols = headers.filter(h => h !== raterCol && h !== commentCol && !h.includes('平均'));
+          const memberCols = headers.filter(h => h && h !== raterCol && h !== commentCol && !h.includes('平均'));
 
           const records = [];
-          rows.forEach((row, ri) => {
+          rows.forEach(row => {
             const rater = String(row[raterCol] ?? '').trim();
             if (!rater || rater.includes('平均')) return;
 
             const scores = {};
-            let isSelfFound = false;
             memberCols.forEach(col => {
               const val = String(row[col] ?? '').trim();
-              if (val === '本人') isSelfFound = true;
+              if (val === '本人') { /* skip self */ }
               else if (val && val !== '-' && !isNaN(Number(val))) scores[col] = Number(val);
             });
 
