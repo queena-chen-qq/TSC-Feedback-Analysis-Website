@@ -254,11 +254,13 @@ export default function App() {
       })()}
 
       {feedbacks.length > 0 && (
-        <div className="chart-card-scroll" style={{ marginTop: 24 }}>
-          <h3 style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 3, paddingBottom: 8, margin: 0 }}>📋 個人填答明細</h3>
-          <div style={{ overflowX: 'auto' }}>
+        <div style={{ marginTop: 24 }}>
+          <div className="chart-card" style={{ borderRadius: '12px 12px 0 0', paddingBottom: 0 }}>
+            <h3>📋 個人填答明細</h3>
+          </div>
+          <div style={{ background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', maxHeight: 480, overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
-            <thead style={{ position: 'sticky', top: 30, zIndex: 2 }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
               <tr>
                 <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>姓名</th>
                 <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>組別</th>
