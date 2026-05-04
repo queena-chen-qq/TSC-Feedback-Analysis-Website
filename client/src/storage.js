@@ -30,8 +30,10 @@ export async function parseExcelFile(file) {
   const colInfo = classifyColumns(headers);
   const fileDate = extractDateFromFilename(file.name);
   const firstRow = rows[0];
-  const courseName = String(firstRow['課程'] || firstRow['上課時段'] || '').trim();
-  const batchLabel = courseName || `${fileDate} - ${file.name}`;
+  const courseCol = headers.find(h => h === '課程' || h === '上課時段') || '';
+  // Collect all unique course names
+  const allCourses = [...new Set(rows.map(r => String(r[courseCol] ?? '').trim()).filter(Boolean))];
+  const batchLabel = allCourses.length === 1 ? allCourses[0] : `${fileDate} - ${file.name.replace(/\.(xlsx|xls|csv)$/i, '')}`;
 
   const records = rows.map((row, i) => {
     const ratings = {};
