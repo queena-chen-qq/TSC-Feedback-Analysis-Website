@@ -56,8 +56,8 @@ function parseMultiSheetExcel(file) {
         const overview = [];
         if (ovRows.length > 0) {
           const nameCol = ovHeaders.find(h => h.includes('姓名')) || ovHeaders[0];
-          const sessionCols = ovHeaders.filter(h => h.includes('堂') || (h.includes('月') && h.includes('日')));
           const avgCol = ovHeaders.find(h => h.includes('總平均')) || '';
+          const sessionCols = ovHeaders.filter(h => h && h !== nameCol && h !== avgCol && !h.includes('組'));
 
           ovRows.forEach(row => {
             const name = String(row[nameCol] ?? '').trim();
