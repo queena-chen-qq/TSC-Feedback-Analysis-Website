@@ -97,8 +97,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>📊 課程回饋分析系統</h1>
-        <p>匯入課程回饋 Excel，依日期查看分析結果</p>
+        <h1>📊 崇越雲拓計畫課程回饋分析</h1>
       </header>
 
       <form className="upload-section" onSubmit={handleUpload}>
