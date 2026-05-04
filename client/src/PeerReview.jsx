@@ -1,69 +1,92 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend);
 
-const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28','#c2d530','#a8ba20','#6d6e71','#8faa1b'];
-const GROUP_NAMES = ['大健康', '半導體', '綠能', '幕僚'];
+const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28','#e0a050','#c45040','#7cb342','#558b2f'];
+const LINE_COLORS = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#e0a050','#c45040','#4a4b4d','#7cb342','#558b2f','#d4c85a','#b8cc28','#3a3a3a'];
 
 function detectGroup(filename) {
-  for (const g of GROUP_NAMES) {
+  for (const g of ['大健康', '半導體', '綠能', '幕僚']) {
     if (filename.includes(g)) return g;
   }
   return '未分類';
 }
 
-function parsePeerExcel(file) {
+function parseMultiSheetExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = async (e) => {
+    reader.onload = (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' });
-        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-        if (rows.length === 0) { reject('Excel 中沒有資料'); return; }
-
-        const headers = Object.keys(rows[0]);
         const rawName = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
         const group = detectGroup(rawName);
-        const batchLabel = rawName;
 
-        const scoreCols = headers.filter(h => h.includes('互評分數'));
-        const members = scoreCols.map(col => {
-          const match = col.match(/- (.+)$/);
-          return match ? match[1].trim() : col;
-        });
-        const commentCol = headers.find(h => h.includes('想對組員說') || h.includes('說的話')) || '';
+        // Parse overview sheet (first sheet)
+        const overviewSheet = wb.Sheets[wb.SheetNames[0]];
+        const overviewRows = XLSX.utils.sheet_to_json(overviewSheet);
+        const overview = [];
+        if (overviewRows.length > 0) {
+          const headers = Object.keys(overviewRows[0]);
+          const nameCol = headers.find(h => h.includes('姓名') || h.includes('組員')) || headers[0];
+          const sessionCols = headers.filter(h => h.includes('堂') || h.includes('月'));
+          const avgCol = headers.find(h => h.includes('總平均') || h.includes('平均')) || '';
 
-        const records = rows.map((row, i) => {
-          const scores = {};
-          let raterName = '';
-          scoreCols.forEach((col, ci) => {
-            const val = String(row[col] ?? '').trim();
-            if (val === '本人') raterName = members[ci];
-            else if (val && !isNaN(Number(val))) scores[members[ci]] = Number(val);
+          overviewRows.forEach(row => {
+            const name = String(row[nameCol] ?? '').trim();
+            if (!name) return;
+            const sessions = {};
+            sessionCols.forEach(col => {
+              const val = parseFloat(row[col]);
+              if (!isNaN(val)) sessions[col] = val;
+            });
+            const totalAvg = avgCol ? parseFloat(row[avgCol]) : 0;
+            overview.push({ name, sessions, totalAvg: isNaN(totalAvg) ? 0 : totalAvg });
           });
-          const comment = commentCol ? String(row[commentCol] ?? '').trim() : '';
-          return {
-            id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
-            batch: batchLabel,
-            group,
-            rater: raterName || `填答者${i + 1}`,
-            scores,
-            comment: (comment && comment !== '無') ? comment : ''
-          };
-        });
+        }
 
-        const res = await fetch('/api/peers', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ batch: batchLabel, records })
-        });
-        if (!res.ok) throw (await res.json()).error || '儲存失敗';
-        resolve({ count: records.length, batch: batchLabel, group });
-      } catch (err) { reject(typeof err === 'string' ? err : err.message); }
+        // Parse each session sheet
+        const sessions = [];
+        for (let i = 1; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+          if (rows.length === 0) continue;
+
+          const headers = Object.keys(rows[0]);
+          const raterCol = headers.find(h => h.includes('評分者')) || headers[0];
+          const commentCol = headers.find(h => h.includes('留言') || h.includes('想對') || h.includes('說的話')) || '';
+          const memberCols = headers.filter(h => h !== raterCol && h !== commentCol && !h.includes('平均'));
+
+          const records = [];
+          rows.forEach((row, ri) => {
+            const rater = String(row[raterCol] ?? '').trim();
+            if (!rater || rater.includes('平均')) return;
+
+            const scores = {};
+            let isSelfFound = false;
+            memberCols.forEach(col => {
+              const val = String(row[col] ?? '').trim();
+              if (val === '本人') isSelfFound = true;
+              else if (val && val !== '-' && !isNaN(Number(val))) scores[col] = Number(val);
+            });
+
+            const comment = commentCol ? String(row[commentCol] ?? '').trim() : '';
+            records.push({
+              rater,
+              scores,
+              comment: (comment && comment !== '無') ? comment : ''
+            });
+          });
+
+          sessions.push({ name: sheetName, members: memberCols, records });
+        }
+
+        resolve({ group, overview, sessions, batch: rawName });
+      } catch (err) { reject(err.message); }
     };
     reader.onerror = () => reject('檔案讀取失敗');
     reader.readAsArrayBuffer(file);
@@ -71,43 +94,30 @@ function parsePeerExcel(file) {
 }
 
 export default function PeerReview() {
-  const [allData, setAllData] = useState([]);
-  const [groups, setGroups] = useState([]);
+  const [allGroups, setAllGroups] = useState({}); // { groupName: { overview, sessions, batch } }
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [batches, setBatches] = useState([]);
-  const [selectedBatch, setSelectedBatch] = useState('__all__');
+  const [selectedSession, setSelectedSession] = useState('__overview__');
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
 
+  // Load from API
   const fetchAll = async () => {
     const res = await fetch('/api/peers');
-    const data = res.ok ? await res.json() : [];
-    setAllData(data);
-    const g = [...new Set(data.map(d => d.group))].sort();
-    setGroups(g);
-    return { data, groups: g };
+    if (!res.ok) return;
+    const items = await res.json();
+    // Reconstruct groups from stored data
+    const groups = {};
+    items.forEach(item => {
+      if (item.groupData) {
+        groups[item.group] = item.groupData;
+      }
+    });
+    setAllGroups(groups);
+    const gNames = Object.keys(groups).sort();
+    if (gNames.length > 0 && !selectedGroup) setSelectedGroup(gNames[0]);
   };
 
-  useEffect(() => {
-    (async () => {
-      const { groups: g } = await fetchAll();
-      if (g.length > 0) setSelectedGroup(g[0]);
-    })();
-  }, []);
-
-  // Update batches when group changes
-  useEffect(() => {
-    if (!selectedGroup) return;
-    const groupData = allData.filter(d => d.group === selectedGroup);
-    const b = [...new Set(groupData.map(d => d.batch))].sort();
-    setBatches(b);
-    setSelectedBatch('__all__');
-  }, [selectedGroup, allData]);
-
-  // Filtered data
-  const data = allData
-    .filter(d => d.group === selectedGroup)
-    .filter(d => selectedBatch === '__all__' || d.batch === selectedBatch);
+  useEffect(() => { fetchAll(); }, []);
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -115,10 +125,22 @@ export default function PeerReview() {
     if (!fi.files[0]) return;
     setUploading(true); setMessage('');
     try {
-      const result = await parsePeerExcel(fi.files[0]);
-      setMessage(`成功匯入 ${result.count} 筆互評 (${result.group} - ${result.batch})`);
-      const { groups: g } = await fetchAll();
-      if (result.group && g.includes(result.group)) setSelectedGroup(result.group);
+      const result = await parseMultiSheetExcel(fi.files[0]);
+      // Save as one record per group
+      const record = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        batch: result.batch,
+        group: result.group,
+        groupData: { overview: result.overview, sessions: result.sessions, batch: result.batch }
+      };
+      await fetch('/api/peers', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch: result.group, records: [record] })
+      });
+      setMessage(`成功匯入 ${result.group} 互評資料`);
+      setAllGroups(prev => ({ ...prev, [result.group]: record.groupData }));
+      setSelectedGroup(result.group);
+      setSelectedSession('__overview__');
     } catch (err) { setMessage(typeof err === 'string' ? err : '匯入失敗'); }
     setUploading(false); fi.value = '';
   };
@@ -126,26 +148,36 @@ export default function PeerReview() {
   const handleClear = async () => {
     if (!confirm('確定要清除所有互評資料嗎？')) return;
     await fetch('/api/peers', { method: 'DELETE' });
-    setAllData([]); setGroups([]); setSelectedGroup(''); setBatches([]);
-    setSelectedBatch('__all__'); setMessage('資料已清除');
+    setAllGroups({}); setSelectedGroup(''); setSelectedSession('__overview__');
+    setMessage('資料已清除');
   };
 
-  // Stats
-  const allMembers = [...new Set(data.flatMap(d => Object.keys(d.scores || {})))];
-  const memberAvg = {};
-  const memberScores = {};
-  allMembers.forEach(m => {
-    const scores = data.map(d => d.scores?.[m]).filter(s => s !== undefined);
-    memberScores[m] = scores;
-    memberAvg[m] = scores.length ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : 0;
-  });
-  const sortedMembers = [...allMembers].sort((a, b) => memberAvg[b] - memberAvg[a]);
-  const comments = data.filter(d => d.comment).map(d => ({ rater: d.rater, batch: d.batch, comment: d.comment }));
-  const overallAvg = sortedMembers.length > 0 ? +(Object.values(memberAvg).reduce((a, b) => a + b, 0) / sortedMembers.length).toFixed(2) : 0;
+  const groupNames = Object.keys(allGroups).sort();
+  const currentData = allGroups[selectedGroup];
+  const overview = currentData?.overview || [];
+  const sessions = currentData?.sessions || [];
+  const currentSession = sessions.find(s => s.name === selectedSession);
 
-  const avgChart = sortedMembers.length > 0 ? {
-    labels: sortedMembers,
-    datasets: [{ label: '平均被評分', data: sortedMembers.map(m => memberAvg[m]), backgroundColor: PALETTE.slice(0, sortedMembers.length) }]
+  // Overview chart: line chart showing each member's score trend
+  const sessionLabels = overview.length > 0 ? Object.keys(overview[0].sessions) : [];
+  const lineChart = overview.length > 0 && sessionLabels.length > 1 ? {
+    labels: sessionLabels.map(l => l.replace(/第\d+堂 \(/, '').replace(')', '')),
+    datasets: overview.map((m, i) => ({
+      label: m.name,
+      data: sessionLabels.map(l => m.sessions[l] ?? null),
+      borderColor: LINE_COLORS[i % LINE_COLORS.length],
+      backgroundColor: LINE_COLORS[i % LINE_COLORS.length],
+      tension: 0.3,
+      pointRadius: 4,
+      spanGaps: true
+    }))
+  } : null;
+
+  // Overview bar chart: total average
+  const sortedOverview = [...overview].sort((a, b) => b.totalAvg - a.totalAvg);
+  const avgBarChart = sortedOverview.length > 0 ? {
+    labels: sortedOverview.map(m => m.name),
+    datasets: [{ label: '總平均', data: sortedOverview.map(m => m.totalAvg), backgroundColor: PALETTE.slice(0, sortedOverview.length) }]
   } : null;
 
   return (
@@ -156,13 +188,14 @@ export default function PeerReview() {
         <button className="btn btn-danger" type="button" onClick={handleClear}>清除資料</button>
         {message && <span style={{ color: '#a8ba20', fontWeight: 500 }}>{message}</span>}
       </form>
+      <p style={{ color: '#999', fontSize: '0.85rem', marginBottom: 16 }}>檔名需包含組別名稱（大健康、半導體、綠能、幕僚）</p>
 
-      {groups.length > 0 && (
+      {groupNames.length > 0 && (
         <>
           {/* Group tabs */}
-          <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid #e0e0de' }}>
-            {groups.map(g => (
-              <button key={g} onClick={() => setSelectedGroup(g)} style={{
+          <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '2px solid #e0e0de' }}>
+            {groupNames.map(g => (
+              <button key={g} onClick={() => { setSelectedGroup(g); setSelectedSession('__overview__'); }} style={{
                 padding: '10px 24px', border: 'none', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 500,
                 background: selectedGroup === g ? '#fff' : 'transparent',
                 color: selectedGroup === g ? '#a8ba20' : '#6d6e71',
@@ -172,120 +205,160 @@ export default function PeerReview() {
             ))}
           </div>
 
-          {/* Batch selector */}
-          {batches.length > 0 && (
-            <div className="controls">
-              <label htmlFor="peer-batch">選擇互評：</label>
-              <select id="peer-batch" value={selectedBatch} onChange={e => setSelectedBatch(e.target.value)}>
-                <option value="__all__">全部彙總 ({batches.length} 份)</option>
-                {batches.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
+          {/* Session tabs */}
+          {currentData && (
+            <div className="controls" style={{ flexWrap: 'wrap', gap: 6 }}>
+              <button onClick={() => setSelectedSession('__overview__')} className="btn" style={{
+                padding: '6px 14px', fontSize: '0.85rem',
+                background: selectedSession === '__overview__' ? '#c2d530' : '#e0e0de',
+                color: selectedSession === '__overview__' ? '#fff' : '#6d6e71'
+              }}>📊 總覽</button>
+              {sessions.map(s => (
+                <button key={s.name} onClick={() => setSelectedSession(s.name)} className="btn" style={{
+                  padding: '6px 14px', fontSize: '0.85rem',
+                  background: selectedSession === s.name ? '#c2d530' : '#e0e0de',
+                  color: selectedSession === s.name ? '#fff' : '#6d6e71'
+                }}>{s.name}</button>
+              ))}
             </div>
           )}
         </>
       )}
 
-      {data.length > 0 && (
+      {/* OVERVIEW VIEW */}
+      {currentData && selectedSession === '__overview__' && (
         <>
-          <div className="stats-grid">
-            <div className="stat-card"><div className="value">{data.length}</div><div className="label">填答人數</div></div>
-            <div className="stat-card"><div className="value">{sortedMembers.length}</div><div className="label">被評人數</div></div>
-            <div className="stat-card"><div className="value">{overallAvg}</div><div className="label">整體平均分 (滿分5)</div></div>
-            <div className="stat-card"><div className="value">{comments.length}</div><div className="label">留言數</div></div>
-          </div>
-
-          {avgChart && (
+          {/* Total average bar chart */}
+          {avgBarChart && (
             <div className="chart-card" style={{ marginBottom: 24 }}>
-              <h3>📊 各成員平均被評分</h3>
-              <Bar data={avgChart} options={{ indexAxis: 'y', scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }} />
+              <h3>📊 各成員總平均分</h3>
+              <Bar data={avgBarChart} options={{ indexAxis: 'y', scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }} />
             </div>
           )}
 
-          <div className="chart-card" style={{ marginBottom: 24, overflowX: 'auto' }}>
-            <h3>📋 個人得分明細</h3>
+          {/* Line chart: score trend */}
+          {lineChart && (
+            <div className="chart-card" style={{ marginBottom: 24 }}>
+              <h3>📈 各成員歷次分數趨勢</h3>
+              <Line data={lineChart} options={{
+                scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } }
+              }} />
+            </div>
+          )}
+
+          {/* Overview table */}
+          <div className="chart-card" style={{ overflowX: 'auto', marginBottom: 24 }}>
+            <h3>📋 各堂課平均分數總覽</h3>
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>成員</th><th style={{ padding: 8 }}>平均分</th><th style={{ padding: 8 }}>各筆評分</th><th style={{ padding: 8 }}>評價</th>
+                  <th style={{ padding: 8, whiteSpace: 'nowrap' }}>組員姓名</th>
+                  {sessionLabels.map(l => <th key={l} style={{ padding: 8, whiteSpace: 'nowrap', textAlign: 'center' }}>{l}</th>)}
+                  <th style={{ padding: 8, whiteSpace: 'nowrap', textAlign: 'center', color: '#a8ba20', fontWeight: 700 }}>總平均</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedMembers.map(m => (
-                  <tr key={m} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: 8, fontWeight: 500 }}>{m}</td>
-                    <td style={{ padding: 8, fontWeight: 600, color: '#a8ba20' }}>{memberAvg[m]}</td>
-                    <td style={{ padding: 8, color: '#6d6e71' }}>{memberScores[m].join(', ')}</td>
-                    <td style={{ padding: 8, width: '30%' }}>
-                      <div style={{ background: '#eef2d0', borderRadius: 4, overflow: 'hidden', height: 8 }}>
-                        <div style={{ width: `${(memberAvg[m]/5)*100}%`, height: '100%', background: '#c2d530', borderRadius: 4 }} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="chart-card" style={{ marginBottom: 24, overflowX: 'auto' }}>
-            <h3>📝 評分矩陣（誰評了誰）</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: '0.85rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #eee' }}>
-                  <th style={{ padding: 6, textAlign: 'left' }}>評分者 ↓ / 被評者 →</th>
-                  {sortedMembers.map(m => <th key={m} style={{ padding: 6, whiteSpace: 'nowrap', textAlign: 'center' }}>{m}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {data.map(d => (
-                  <tr key={d.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                    <td style={{ padding: 6, fontWeight: 500, whiteSpace: 'nowrap' }}>
-                      {d.rater}
-                      {selectedBatch === '__all__' && <span style={{ color: '#999', fontSize: '0.75rem', marginLeft: 4 }}>({d.batch.slice(0, 15)})</span>}
-                    </td>
-                    {sortedMembers.map(m => {
-                      const isSelf = d.rater === m;
-                      const score = d.scores?.[m];
-                      return (
-                        <td key={m} style={{
-                          padding: 6, textAlign: 'center',
-                          background: isSelf ? '#f5f5f4' : (score ? `rgba(194,213,48,${score/7})` : ''),
-                          color: isSelf ? '#999' : '#333', fontWeight: score ? 500 : 400
-                        }}>{isSelf ? '本人' : (score ?? '-')}</td>
-                      );
+                {sortedOverview.map(m => (
+                  <tr key={m.name} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <td style={{ padding: 8, fontWeight: 500 }}>{m.name}</td>
+                    {sessionLabels.map(l => {
+                      const v = m.sessions[l];
+                      return <td key={l} style={{ padding: 8, textAlign: 'center', color: v >= 4.5 ? '#a8ba20' : v < 3.5 ? '#c45040' : '#333' }}>{v?.toFixed(2) ?? '-'}</td>;
                     })}
+                    <td style={{ padding: 8, textAlign: 'center', fontWeight: 700, color: '#a8ba20' }}>{m.totalAvg.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          {comments.length > 0 && (
-            <div className="chart-card" style={{ marginBottom: 24 }}>
-              <h3>💬 給組員的話</h3>
-              <div style={{ marginTop: 12 }}>
-                {comments.map((c, i) => (
-                  <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                    <span style={{ color: '#6d6e71', fontSize: '0.85rem', minWidth: 60, flexShrink: 0 }}>{c.rater}</span>
-                    {selectedBatch === '__all__' && <span style={{ background: '#eef2d0', padding: '1px 6px', borderRadius: 4, fontSize: '0.75rem', color: '#a8ba20', flexShrink: 0 }}>{c.batch.slice(0, 15)}</span>}
-                    <span style={{ fontWeight: 500 }}>{c.comment}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </>
       )}
 
-      {groups.length === 0 && (
+      {/* SESSION DETAIL VIEW */}
+      {currentSession && selectedSession !== '__overview__' && (() => {
+        const members = currentSession.members;
+        const records = currentSession.records;
+        const comments = records.filter(r => r.comment);
+
+        // Compute averages per member
+        const memberAvg = {};
+        members.forEach(m => {
+          const scores = records.map(r => r.scores[m]).filter(s => s !== undefined);
+          memberAvg[m] = scores.length ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : 0;
+        });
+        const sortedMembers = [...members].sort((a, b) => memberAvg[b] - memberAvg[a]);
+
+        const barChart = {
+          labels: sortedMembers,
+          datasets: [{ label: '平均被評分', data: sortedMembers.map(m => memberAvg[m]), backgroundColor: PALETTE.slice(0, sortedMembers.length) }]
+        };
+
+        return (
+          <>
+            <div className="chart-card" style={{ marginBottom: 24 }}>
+              <h3>📊 {currentSession.name} - 各成員平均被評分</h3>
+              <Bar data={barChart} options={{ indexAxis: 'y', scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }} />
+            </div>
+
+            <div className="chart-card" style={{ marginBottom: 24, overflowX: 'auto' }}>
+              <h3>📝 評分矩陣</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #eee' }}>
+                    <th style={{ padding: 6, textAlign: 'left' }}>評分者 ↓ / 被評者 →</th>
+                    {members.map(m => <th key={m} style={{ padding: 6, whiteSpace: 'nowrap', textAlign: 'center' }}>{m}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {records.map((r, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                      <td style={{ padding: 6, fontWeight: 500, whiteSpace: 'nowrap' }}>{r.rater}</td>
+                      {members.map(m => {
+                        const isSelf = r.rater === m;
+                        const score = r.scores[m];
+                        return (
+                          <td key={m} style={{
+                            padding: 6, textAlign: 'center',
+                            background: isSelf ? '#f5f5f4' : (score ? `rgba(194,213,48,${score/7})` : ''),
+                            color: isSelf ? '#999' : '#333', fontWeight: score ? 500 : 400
+                          }}>{isSelf ? '本人' : (score ?? '-')}</td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {/* Average row */}
+                  <tr style={{ borderTop: '2px solid #e0e0de', fontWeight: 600 }}>
+                    <td style={{ padding: 6 }}>各人平均</td>
+                    {members.map(m => (
+                      <td key={m} style={{ padding: 6, textAlign: 'center', color: '#a8ba20' }}>{memberAvg[m]}</td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {comments.length > 0 && (
+              <div className="chart-card" style={{ marginBottom: 24 }}>
+                <h3>💬 給組員的話</h3>
+                <div style={{ marginTop: 12 }}>
+                  {comments.map((c, i) => (
+                    <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                      <span style={{ color: '#6d6e71', fontSize: '0.85rem', marginRight: 8 }}>{c.rater}</span>
+                      <span style={{ fontWeight: 500 }}>{c.comment}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {groupNames.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
           <p style={{ fontSize: '1.2rem' }}>尚無互評資料，請先匯入 Excel 檔案</p>
-          <p style={{ marginTop: 8, fontSize: '0.9rem' }}>檔名包含組別名稱（大健康、半導體、綠能、幕僚）可自動分類</p>
-        </div>
-      )}
-
-      {groups.length > 0 && data.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-          <p>此組別尚無互評資料</p>
+          <p style={{ marginTop: 8, fontSize: '0.9rem' }}>每組一份 Excel，包含總覽和各堂課互評 sheet</p>
         </div>
       )}
     </div>
