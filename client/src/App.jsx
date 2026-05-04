@@ -9,9 +9,9 @@ import { parseExcelFile, getBatches, getFeedbacks, getStats, clearData } from '.
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler);
 
 const COLORS_SAT = {
-  '非常滿意': '#2dc653', '滿意': '#4361ee', '普通': '#f4a261', '不滿意': '#e76f51', '非常不滿意': '#e63946'
+  '非常滿意': '#a8ba20', '滿意': '#c2d530', '普通': '#d4c85a', '不滿意': '#e0a050', '非常不滿意': '#c45040'
 };
-const PALETTE = ['#4361ee','#7209b7','#f72585','#4cc9f0','#3a0ca3','#560bad','#e63946','#2dc653'];
+const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28'];
 
 function shortLabel(col) {
   return col.replace('課程安排 - ', '').replace('講師授課情形 - ', '').replace('課程難易度 - ', '難易度: ');
@@ -86,7 +86,7 @@ export default function App() {
     labels: ratingKeys.map(shortLabel),
     datasets: [{
       label: '平均分數', data: ratingKeys.map(k => stats.ratingAvg[k]),
-      backgroundColor: 'rgba(67,97,238,0.2)', borderColor: '#4361ee', pointBackgroundColor: '#4361ee'
+      backgroundColor: 'rgba(194,213,48,0.2)', borderColor: '#a8ba20', pointBackgroundColor: '#a8ba20'
     }]
   } : null;
 
@@ -104,7 +104,7 @@ export default function App() {
         <input type="file" accept=".xlsx,.xls,.csv" aria-label="選擇 Excel 檔案" />
         <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? '上傳中...' : '匯入 Excel'}</button>
         <button className="btn btn-danger" type="button" onClick={handleClear}>清除資料</button>
-        {message && <span style={{ color: '#4361ee', fontWeight: 500 }}>{message}</span>}
+        {message && <span style={{ color: '#a8ba20', fontWeight: 500 }}>{message}</span>}
       </form>
 
       {batches.length > 0 && (
@@ -166,8 +166,8 @@ export default function App() {
                       <td style={{ padding: 8 }}>{shortLabel(k)}</td>
                       <td style={{ padding: 8, fontWeight: 600 }}>{stats.ratingAvg[k]}</td>
                       <td style={{ padding: 8 }}>
-                        <div style={{ background: '#e8edff', borderRadius: 4, overflow: 'hidden', height: 8 }}>
-                          <div style={{ width: `${(stats.ratingAvg[k]/5)*100}%`, height: '100%', background: i < 4 ? '#4361ee' : '#7209b7', borderRadius: 4 }} />
+                        <div style={{ background: '#eef2d0', borderRadius: 4, overflow: 'hidden', height: 8 }}>
+                          <div style={{ width: `${(stats.ratingAvg[k]/5)*100}%`, height: '100%', background: i < 4 ? '#c2d530' : '#a8ba20', borderRadius: 4 }} />
                         </div>
                       </td>
                     </tr>
@@ -186,7 +186,7 @@ export default function App() {
             {stats.suggestions.map((s, i) => (
               <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid #f0f0f0' }}>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-                  <span style={{ background: '#e8edff', padding: '2px 8px', borderRadius: 4, fontSize: '0.85rem', color: '#4361ee' }}>{s.type}</span>
+                  <span style={{ background: '#eef2d0', padding: '2px 8px', borderRadius: 4, fontSize: '0.85rem', color: '#a8ba20' }}>{s.type}</span>
                   <span style={{ color: '#888', fontSize: '0.85rem' }}>{s.name}</span>
                 </div>
                 <div style={{ color: '#333' }}>{s.content}</div>
