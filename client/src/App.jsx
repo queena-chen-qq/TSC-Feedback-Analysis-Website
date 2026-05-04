@@ -255,13 +255,13 @@ export default function App() {
 
       {feedbacks.length > 0 && (
         <div className="chart-card" style={{ marginTop: 24, overflowX: 'auto', maxHeight: 500, overflowY: 'auto' }}>
-          <h3 style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 1, paddingBottom: 8 }}>📋 個人填答明細</h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-            <thead style={{ position: 'sticky', top: 36, background: '#fff', zIndex: 1 }}>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                <th style={{ padding: 6, whiteSpace: 'nowrap' }}>姓名</th>
-                <th style={{ padding: 6, whiteSpace: 'nowrap' }}>組別</th>
-                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap' }}>{shortLabel(k)}</th>)}
+          <h3 style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 2, paddingBottom: 8, paddingTop: 4, margin: 0 }}>📋 個人填答明細</h3>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
+            <thead style={{ position: 'sticky', top: 32, zIndex: 2 }}>
+              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left', background: '#fff' }}>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>姓名</th>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>組別</th>
+                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>{shortLabel(k)}</th>)}
               </tr>
             </thead>
             <tbody>
