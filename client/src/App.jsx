@@ -6,6 +6,7 @@ import {
 import { Pie, Bar, Radar } from 'react-chartjs-2';
 import { parseExcelFile, getBatches, getFeedbacks, getStats, clearData } from './storage.js';
 import PeerReview from './PeerReview.jsx';
+import DeleteModal from './DeleteModal.jsx';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler);
 
@@ -29,6 +30,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedExtraField, setSelectedExtraField] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const refresh = async (batch, group) => {
     const b = batch || selectedBatch;
@@ -69,11 +71,18 @@ export default function App() {
     setUploading(false); fi.value = '';
   };
 
-  const handleClear = async () => {
-    if (!confirm('確定要清除所有資料嗎？')) return;
-    await clearData();
-    setBatches([]); setSelectedBatch(''); setSelectedGroup(''); setGroups([]);
-    setStats(null); setFeedbacks([]); setMessage('資料已清除');
+  const handleClear = async (batchesToDelete) => {
+    for (const b of batchesToDelete) {
+      await fetch(`/api/feedbacks?batch=${encodeURIComponent(b)}`, { method: 'DELETE' });
+    }
+    const nb = await refreshBatches();
+    if (nb.length > 0) {
+      setSelectedGroup(''); setSelectedBatch(nb[0]); await refresh(nb[0], '');
+    } else {
+      setBatches([]); setSelectedBatch(''); setSelectedGroup(''); setGroups([]);
+      setStats(null); setFeedbacks([]);
+    }
+    setMessage(`已刪除 ${batchesToDelete.length} 筆資料`);
   };
 
   const ratingKeys = stats?.ratingAvg ? Object.keys(stats.ratingAvg) : [];
@@ -130,7 +139,7 @@ export default function App() {
       <form className="upload-section" onSubmit={handleUpload}>
         <input type="file" accept=".xlsx,.xls,.csv" aria-label="選擇 Excel 檔案" />
         <button className="btn btn-primary" type="submit" disabled={uploading}>{uploading ? '上傳中...' : '匯入 Excel'}</button>
-        <button className="btn btn-danger" type="button" onClick={handleClear}>清除資料</button>
+        <button className="btn btn-danger" type="button" onClick={() => setShowDeleteModal(true)}>清除資料</button>
         {message && <span style={{ color: '#a8ba20', fontWeight: 500 }}>{message}</span>}
       </form>
 
@@ -291,6 +300,15 @@ export default function App() {
         </div>
       )}
       </>
+      )}
+
+      {showDeleteModal && (
+        <DeleteModal
+          title="選擇要刪除的課程回饋"
+          items={batches}
+          onDelete={handleClear}
+          onClose={() => setShowDeleteModal(false)}
+        />
       )}
     </div>
   );

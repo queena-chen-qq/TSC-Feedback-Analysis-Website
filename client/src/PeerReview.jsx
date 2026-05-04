@@ -4,6 +4,7 @@ import {
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import * as XLSX from 'xlsx';
+import DeleteModal from './DeleteModal.jsx';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend);
 
@@ -118,6 +119,7 @@ export default function PeerReview() {
   const [selectedTab, setSelectedTab] = useState('overview');
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Load from DynamoDB
   const fetchAll = async () => {
@@ -164,10 +166,17 @@ export default function PeerReview() {
     setUploading(false); fi.value = '';
   };
 
-  const handleClear = async () => {
-    if (!confirm('確定要清除所有互評資料嗎？')) return;
-    await fetch('/api/peers', { method: 'DELETE' });
-    setGroups({}); setSelectedGroup(''); setSelectedTab('overview'); setMessage('資料已清除');
+  const handleClear = async (groupsToDelete) => {
+    for (const g of groupsToDelete) {
+      await fetch(`/api/peers?batch=${encodeURIComponent(g)}`, { method: 'DELETE' });
+    }
+    const next = { ...groups };
+    groupsToDelete.forEach(g => delete next[g]);
+    setGroups(next);
+    const remaining = Object.keys(next);
+    if (remaining.length > 0) { setSelectedGroup(remaining[0]); } else { setSelectedGroup(''); }
+    setSelectedTab('overview');
+    setMessage(`已刪除 ${groupsToDelete.length} 組資料`);
   };
 
   const groupNames = Object.keys(groups).sort();
@@ -205,7 +214,7 @@ export default function PeerReview() {
         <button className="btn btn-primary" type="submit" disabled={uploading}>
           {uploading ? '上傳中...' : '匯入互評 Excel'}
         </button>
-        <button className="btn btn-danger" type="button" onClick={handleClear}>清除資料</button>
+        <button className="btn btn-danger" type="button" onClick={() => setShowDeleteModal(true)}>清除資料</button>
         {message && <span style={{ color: '#a8ba20', fontWeight: 500 }}>{message}</span>}
       </form>
 
@@ -437,6 +446,14 @@ export default function PeerReview() {
             );
           })()}
         </>
+      )}
+      {showDeleteModal && (
+        <DeleteModal
+          title="選擇要刪除的互評資料"
+          items={groupNames}
+          onDelete={handleClear}
+          onClose={() => setShowDeleteModal(false)}
+        />
       )}
     </div>
   );

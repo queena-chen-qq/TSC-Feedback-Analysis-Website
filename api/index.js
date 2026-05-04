@@ -70,13 +70,26 @@ app.get('/api/feedbacks', async (req, res) => {
 // Delete all feedbacks
 app.delete('/api/feedbacks', async (req, res) => {
   try {
-    const result = await ddb.send(new ScanCommand({
-      TableName: FEEDBACK_TABLE, ProjectionExpression: 'pk, sk'
-    }));
-    for (const item of (result.Items || [])) {
+    const { batch } = req.query;
+    let items;
+    if (batch) {
+      const result = await ddb.send(new QueryCommand({
+        TableName: FEEDBACK_TABLE,
+        KeyConditionExpression: 'pk = :b',
+        ExpressionAttributeValues: { ':b': batch },
+        ProjectionExpression: 'pk, sk'
+      }));
+      items = result.Items || [];
+    } else {
+      const result = await ddb.send(new ScanCommand({
+        TableName: FEEDBACK_TABLE, ProjectionExpression: 'pk, sk'
+      }));
+      items = result.Items || [];
+    }
+    for (const item of items) {
       await ddb.send(new DeleteCommand({ TableName: FEEDBACK_TABLE, Key: { pk: item.pk, sk: item.sk } }));
     }
-    res.json({ message: '已清除' });
+    res.json({ message: `已清除 ${items.length} 筆` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -129,13 +142,26 @@ app.get('/api/peers', async (req, res) => {
 
 app.delete('/api/peers', async (req, res) => {
   try {
-    const result = await ddb.send(new ScanCommand({
-      TableName: PEER_TABLE, ProjectionExpression: 'pk, sk'
-    }));
-    for (const item of (result.Items || [])) {
+    const { batch } = req.query;
+    let items;
+    if (batch) {
+      const result = await ddb.send(new QueryCommand({
+        TableName: PEER_TABLE,
+        KeyConditionExpression: 'pk = :b',
+        ExpressionAttributeValues: { ':b': batch },
+        ProjectionExpression: 'pk, sk'
+      }));
+      items = result.Items || [];
+    } else {
+      const result = await ddb.send(new ScanCommand({
+        TableName: PEER_TABLE, ProjectionExpression: 'pk, sk'
+      }));
+      items = result.Items || [];
+    }
+    for (const item of items) {
       await ddb.send(new DeleteCommand({ TableName: PEER_TABLE, Key: { pk: item.pk, sk: item.sk } }));
     }
-    res.json({ message: '已清除' });
+    res.json({ message: `已清除 ${items.length} 筆` });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
