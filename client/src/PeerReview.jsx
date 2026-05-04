@@ -7,19 +7,12 @@ import * as XLSX from 'xlsx';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const STORAGE_KEY = 'tsc_peer_reviews';
 const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28','#c2d530','#a8ba20','#6d6e71','#8faa1b'];
-
-function readData() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-  catch { return []; }
-}
-function writeData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 
 function parsePeerExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const wb = XLSX.read(e.target.result, { type: 'array' });
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
@@ -27,33 +20,24 @@ function parsePeerExcel(file) {
 
         const headers = Object.keys(rows[0]);
         const batchLabel = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
-
-        // Find score columns (組內互評分數)
         const scoreCols = headers.filter(h => h.includes('互評分數'));
-        // Extract member names from column headers
         const members = scoreCols.map(col => {
           const match = col.match(/- (.+)$/);
           return match ? match[1].trim() : col;
         });
-
-        // Find comment column
         const commentCol = headers.find(h => h.includes('想對組員說') || h.includes('說的話')) || '';
 
-        // Parse each row: figure out who is the rater (the one with "本人")
         const records = rows.map((row, i) => {
           const scores = {};
           let raterName = '';
           scoreCols.forEach((col, ci) => {
             const val = String(row[col] ?? '').trim();
-            if (val === '本人') {
-              raterName = members[ci];
-            } else if (val && !isNaN(Number(val))) {
-              scores[members[ci]] = Number(val);
-            }
+            if (val === '本人') raterName = members[ci];
+            else if (val && !isNaN(Number(val))) scores[members[ci]] = Number(val);
           });
           const comment = commentCol ? String(row[commentCol] ?? '').trim() : '';
           return {
-            id: Date.now() + i + Math.random(),
+            id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
             batch: batchLabel,
             rater: raterName || `填答者${i + 1}`,
             scores,
@@ -61,10 +45,13 @@ function parsePeerExcel(file) {
           };
         });
 
-        const existing = readData();
-        writeData([...existing, ...records]);
+        const res = await fetch('/api/peers', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batch: batchLabel, records })
+        });
+        if (!res.ok) throw (await res.json()).error || '儲存失敗';
         resolve({ count: records.length, batch: batchLabel, members });
-      } catch (err) { reject(err.message); }
+      } catch (err) { reject(typeof err === 'string' ? err : err.message); }
     };
     reader.onerror = () => reject('檔案讀取失敗');
     reader.readAsArrayBuffer(file);
@@ -78,21 +65,25 @@ export default function PeerReview() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const refresh = (batch) => {
+  const refresh = async (batch) => {
     const b = batch || selectedBatch;
-    const all = readData();
-    setData(b ? all.filter(d => d.batch === b) : all);
+    const q = b ? `?batch=${encodeURIComponent(b)}` : '';
+    const res = await fetch(`/api/peers${q}`);
+    setData(res.ok ? await res.json() : []);
   };
 
-  const refreshBatches = () => {
-    const b = [...new Set(readData().map(d => d.batch))].sort();
+  const refreshBatches = async () => {
+    const res = await fetch('/api/peers/batches');
+    const b = res.ok ? await res.json() : [];
     setBatches(b);
     return b;
   };
 
   useEffect(() => {
-    const b = refreshBatches();
-    if (b.length > 0) { setSelectedBatch(b[0]); refresh(b[0]); }
+    (async () => {
+      const b = await refreshBatches();
+      if (b.length > 0) { setSelectedBatch(b[0]); await refresh(b[0]); }
+    })();
   }, []);
 
   useEffect(() => { if (selectedBatch) refresh(selectedBatch); }, [selectedBatch]);
@@ -105,46 +96,35 @@ export default function PeerReview() {
     try {
       const result = await parsePeerExcel(fi.files[0]);
       setMessage(`成功匯入 ${result.count} 筆互評 (${result.batch})`);
-      const nb = refreshBatches();
-      if (nb.length > 0) { setSelectedBatch(nb[nb.length - 1]); refresh(nb[nb.length - 1]); }
+      const nb = await refreshBatches();
+      if (nb.length > 0) { setSelectedBatch(nb[nb.length - 1]); await refresh(nb[nb.length - 1]); }
     } catch (err) { setMessage(typeof err === 'string' ? err : '匯入失敗'); }
     setUploading(false); fi.value = '';
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!confirm('確定要清除所有互評資料嗎？')) return;
-    writeData([]);
+    await fetch('/api/peers', { method: 'DELETE' });
     setBatches([]); setSelectedBatch(''); setData([]); setMessage('資料已清除');
   };
 
-  // Compute stats
-  const allMembers = [...new Set(data.flatMap(d => Object.keys(d.scores)))];
-  // Average score each member received
+  const allMembers = [...new Set(data.flatMap(d => Object.keys(d.scores || {})))];
   const memberAvg = {};
   const memberScores = {};
   allMembers.forEach(m => {
-    const scores = data.map(d => d.scores[m]).filter(s => s !== undefined);
+    const scores = data.map(d => d.scores?.[m]).filter(s => s !== undefined);
     memberScores[m] = scores;
     memberAvg[m] = scores.length ? +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : 0;
   });
-
-  // Sort by average descending
   const sortedMembers = [...allMembers].sort((a, b) => memberAvg[b] - memberAvg[a]);
 
   const avgChart = sortedMembers.length > 0 ? {
     labels: sortedMembers,
-    datasets: [{
-      label: '平均被評分',
-      data: sortedMembers.map(m => memberAvg[m]),
-      backgroundColor: PALETTE.slice(0, sortedMembers.length)
-    }]
+    datasets: [{ label: '平均被評分', data: sortedMembers.map(m => memberAvg[m]), backgroundColor: PALETTE.slice(0, sortedMembers.length) }]
   } : null;
 
   const comments = data.filter(d => d.comment).map(d => ({ rater: d.rater, comment: d.comment }));
-
-  const overallAvg = sortedMembers.length > 0
-    ? +(Object.values(memberAvg).reduce((a, b) => a + b, 0) / sortedMembers.length).toFixed(2)
-    : 0;
+  const overallAvg = sortedMembers.length > 0 ? +(Object.values(memberAvg).reduce((a, b) => a + b, 0) / sortedMembers.length).toFixed(2) : 0;
 
   return (
     <div>
@@ -176,11 +156,7 @@ export default function PeerReview() {
           {avgChart && (
             <div className="chart-card" style={{ marginBottom: 24 }}>
               <h3>📊 各成員平均被評分</h3>
-              <Bar data={avgChart} options={{
-                indexAxis: 'y',
-                scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } },
-                plugins: { legend: { display: false } }
-              }} />
+              <Bar data={avgChart} options={{ indexAxis: 'y', scales: { x: { min: 0, max: 5, ticks: { stepSize: 1 } } }, plugins: { legend: { display: false } } }} />
             </div>
           )}
 
@@ -189,10 +165,7 @@ export default function PeerReview() {
             <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                  <th style={{ padding: 8 }}>成員</th>
-                  <th style={{ padding: 8 }}>平均分</th>
-                  <th style={{ padding: 8 }}>各筆評分</th>
-                  <th style={{ padding: 8 }}>評價</th>
+                  <th style={{ padding: 8 }}>成員</th><th style={{ padding: 8 }}>平均分</th><th style={{ padding: 8 }}>各筆評分</th><th style={{ padding: 8 }}>評價</th>
                 </tr>
               </thead>
               <tbody>
@@ -227,15 +200,13 @@ export default function PeerReview() {
                     <td style={{ padding: 6, fontWeight: 500 }}>{d.rater}</td>
                     {sortedMembers.map(m => {
                       const isSelf = d.rater === m;
-                      const score = d.scores[m];
+                      const score = d.scores?.[m];
                       return (
                         <td key={m} style={{
                           padding: 6, textAlign: 'center',
                           background: isSelf ? '#f5f5f4' : (score ? `rgba(194,213,48,${score/7})` : ''),
                           color: isSelf ? '#999' : '#333', fontWeight: score ? 500 : 400
-                        }}>
-                          {isSelf ? '本人' : (score ?? '-')}
-                        </td>
+                        }}>{isSelf ? '本人' : (score ?? '-')}</td>
                       );
                     })}
                   </tr>

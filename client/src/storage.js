@@ -1,22 +1,6 @@
 import * as XLSX from 'xlsx';
 
-const STORAGE_KEY = 'tsc_feedbacks';
-
 const SCORE_MAP = { '非常滿意': 5, '滿意': 4, '普通': 3, '不滿意': 2, '非常不滿意': 1 };
-
-export function readData() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch { return []; }
-}
-
-export function writeData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-export function clearData() {
-  localStorage.removeItem(STORAGE_KEY);
-}
 
 function classifyColumns(headers) {
   const ratingCols = [], suggestionCols = [], extraCols = [];
@@ -36,77 +20,68 @@ function extractDateFromFilename(filename) {
   return new Date().toISOString().slice(5, 10).replace('-', '/');
 }
 
-export function parseExcelFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const workbook = XLSX.read(e.target.result, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-        if (rows.length === 0) { reject('Excel 中沒有資料'); return; }
+export async function parseExcelFile(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+  if (rows.length === 0) throw 'Excel 中沒有資料';
 
-        const headers = Object.keys(rows[0]);
-        const colInfo = classifyColumns(headers);
-        const fileDate = extractDateFromFilename(file.name);
+  const headers = Object.keys(rows[0]);
+  const colInfo = classifyColumns(headers);
+  const fileDate = extractDateFromFilename(file.name);
+  const firstRow = rows[0];
+  const courseName = String(firstRow['課程'] || firstRow['上課時段'] || '').trim();
+  const batchLabel = courseName || `${fileDate} - ${file.name}`;
 
-        // Detect course name from first row to build batch label
-        const firstRow = rows[0];
-        const courseName = String(firstRow['課程'] || firstRow['上課時段'] || '').trim();
-        const batchLabel = courseName || `${fileDate} - ${file.name}`;
-
-        const records = rows.map((row, i) => {
-          const ratings = {};
-          colInfo.ratingCols.forEach(col => {
-            const val = String(row[col] ?? '').trim();
-            ratings[col] = { label: val || '未填', score: SCORE_MAP[val] || 0 };
-          });
-          const suggestions = {};
-          colInfo.suggestionCols.forEach(col => {
-            const val = String(row[col] ?? '').trim();
-            suggestions[col] = (!val || val === '無' || val === 'Na' || val === 'NA') ? '' : val;
-          });
-          const extras = {};
-          colInfo.extraCols.forEach(col => {
-            const val = String(row[col] ?? '').trim();
-            if (val && val !== '無' && val !== 'Na' && val !== 'NA') extras[col] = val;
-          });
-
-          return {
-            id: Date.now() + i + Math.random(),
-            date: fileDate,
-            batch: batchLabel,
-            name: String(row['姓名'] ?? '未知').trim(),
-            group: String(row['參加組別'] ?? '').trim(),
-            course: String(row['課程'] || row['上課時段'] || '').trim(),
-            ratings, suggestions, extras
-          };
-        });
-
-        const existing = readData();
-        writeData([...existing, ...records]);
-        resolve({ count: records.length, date: fileDate, batch: batchLabel });
-      } catch (err) { reject(err.message); }
+  const records = rows.map((row, i) => {
+    const ratings = {};
+    colInfo.ratingCols.forEach(col => {
+      const val = String(row[col] ?? '').trim();
+      ratings[col] = { label: val || '未填', score: SCORE_MAP[val] || 0 };
+    });
+    const suggestions = {};
+    colInfo.suggestionCols.forEach(col => {
+      const val = String(row[col] ?? '').trim();
+      suggestions[col] = (!val || val === '無' || val === 'Na' || val === 'NA') ? '' : val;
+    });
+    const extras = {};
+    colInfo.extraCols.forEach(col => {
+      const val = String(row[col] ?? '').trim();
+      if (val && val !== '無' && val !== 'Na' && val !== 'NA') extras[col] = val;
+    });
+    return {
+      id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      date: fileDate, batch: batchLabel,
+      name: String(row['姓名'] ?? '未知').trim(),
+      group: String(row['參加組別'] ?? '').trim(),
+      course: String(row['課程'] || row['上課時段'] || '').trim(),
+      ratings, suggestions, extras
     };
-    reader.onerror = () => reject('檔案讀取失敗');
-    reader.readAsArrayBuffer(file);
   });
+
+  const res = await fetch('/api/feedbacks', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ batch: batchLabel, records })
+  });
+  if (!res.ok) throw (await res.json()).error || '儲存失敗';
+  return { count: records.length, batch: batchLabel };
 }
 
-export function getBatches() {
-  const data = readData();
-  return [...new Set(data.map(item => item.batch))].sort();
+export async function getBatches() {
+  const res = await fetch('/api/feedbacks/batches');
+  return res.ok ? await res.json() : [];
 }
 
-export function getFeedbacks(batch, group) {
-  let data = readData();
-  if (batch) data = data.filter(item => item.batch === batch);
+export async function getFeedbacks(batch, group) {
+  const q = batch ? `?batch=${encodeURIComponent(batch)}` : '';
+  const res = await fetch(`/api/feedbacks${q}`);
+  let data = res.ok ? await res.json() : [];
   if (group) data = data.filter(item => item.group === group);
   return data;
 }
 
-export function getStats(batch, group) {
-  const filtered = getFeedbacks(batch, group);
+export async function getStats(batch, group) {
+  const filtered = await getFeedbacks(batch, group);
   if (filtered.length === 0) {
     return { total: 0, groups: {}, ratingAvg: {}, distribution: {}, overallAvg: 0, suggestions: [], extras: [] };
   }
@@ -152,4 +127,8 @@ export function getStats(batch, group) {
   });
 
   return { total, groups, ratingAvg, distribution, overallAvg, suggestions, extras };
+}
+
+export async function clearData() {
+  await fetch('/api/feedbacks', { method: 'DELETE' });
 }

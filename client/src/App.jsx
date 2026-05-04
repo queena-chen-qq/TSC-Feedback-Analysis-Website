@@ -30,24 +30,27 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [selectedExtraField, setSelectedExtraField] = useState('');
 
-  const refresh = (batch, group) => {
+  const refresh = async (batch, group) => {
     const b = batch || selectedBatch;
     const g = group !== undefined ? group : selectedGroup;
-    const s = getStats(b, g);
+    const s = await getStats(b, g);
     setStats(s);
-    setFeedbacks(getFeedbacks(b, g));
+    const f = await getFeedbacks(b, g);
+    setFeedbacks(f);
     if (!g && s.groups) setGroups(Object.keys(s.groups));
   };
 
-  const refreshBatches = () => {
-    const b = getBatches();
+  const refreshBatches = async () => {
+    const b = await getBatches();
     setBatches(b);
     return b;
   };
 
   useEffect(() => {
-    const b = refreshBatches();
-    if (b.length > 0) { setSelectedBatch(b[0]); refresh(b[0], ''); }
+    (async () => {
+      const b = await refreshBatches();
+      if (b.length > 0) { setSelectedBatch(b[0]); await refresh(b[0], ''); }
+    })();
   }, []);
 
   useEffect(() => { if (selectedBatch) refresh(selectedBatch, selectedGroup); }, [selectedBatch, selectedGroup]);
@@ -60,15 +63,15 @@ export default function App() {
     try {
       const result = await parseExcelFile(fi.files[0]);
       setMessage(`成功匯入 ${result.count} 筆回饋 (${result.batch})`);
-      const nb = refreshBatches();
-      if (nb.length > 0) { setSelectedGroup(''); setSelectedBatch(nb[nb.length - 1]); refresh(nb[nb.length - 1], ''); }
+      const nb = await refreshBatches();
+      if (nb.length > 0) { setSelectedGroup(''); setSelectedBatch(nb[nb.length - 1]); await refresh(nb[nb.length - 1], ''); }
     } catch (err) { setMessage(typeof err === 'string' ? err : '匯入失敗'); }
     setUploading(false); fi.value = '';
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!confirm('確定要清除所有資料嗎？')) return;
-    clearData();
+    await clearData();
     setBatches([]); setSelectedBatch(''); setSelectedGroup(''); setGroups([]);
     setStats(null); setFeedbacks([]); setMessage('資料已清除');
   };
