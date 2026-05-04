@@ -26,6 +26,7 @@ export default function App() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
+  const [selectedExtraField, setSelectedExtraField] = useState('');
 
   const refresh = (batch, group) => {
     const b = batch || selectedBatch;
@@ -110,7 +111,7 @@ export default function App() {
       {batches.length > 0 && (
         <div className="controls">
           <label htmlFor="batch-select">選擇課程：</label>
-          <select id="batch-select" value={selectedBatch} onChange={e => { setSelectedGroup(''); setSelectedBatch(e.target.value); }}>
+          <select id="batch-select" value={selectedBatch} onChange={e => { setSelectedGroup(''); setSelectedExtraField(''); setSelectedBatch(e.target.value); }}>
             {batches.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <label htmlFor="group-select">篩選組別：</label>
@@ -196,20 +197,35 @@ export default function App() {
         </div>
       )}
 
-      {stats?.extras?.length > 0 && (
-        <div className="chart-card" style={{ marginTop: 24 }}>
-          <h3>📝 其他回饋（應用場景、學習方向等）</h3>
-          <div style={{ marginTop: 12 }}>
-            {stats.extras.map((e, i) => (
-              <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 8, alignItems: 'baseline' }}>
-                <span style={{ color: '#888', fontSize: '0.85rem', minWidth: 60 }}>{e.name}</span>
-                <span style={{ background: '#f0f2f5', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', color: '#666' }}>{shortLabel(e.field)}</span>
-                <span>{e.value}</span>
-              </div>
-            ))}
+      {stats?.extras?.length > 0 && (() => {
+        const extraFields = [...new Set(stats.extras.map(e => e.field))];
+        const filtered = selectedExtraField ? stats.extras.filter(e => e.field === selectedExtraField) : stats.extras;
+        return (
+          <div className="chart-card" style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>📝 其他回饋</h3>
+              <select
+                value={selectedExtraField}
+                onChange={e => setSelectedExtraField(e.target.value)}
+                style={{ padding: '6px 10px', border: '1px solid #e0e0de', borderRadius: 8, fontSize: '0.9rem' }}
+              >
+                <option value="">全部欄位</option>
+                {extraFields.map(f => <option key={f} value={f}>{shortLabel(f)}</option>)}
+              </select>
+              <span style={{ color: '#6d6e71', fontSize: '0.85rem' }}>{filtered.length} 筆</span>
+            </div>
+            <div>
+              {filtered.map((e, i) => (
+                <div key={i} style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                  <span style={{ color: '#6d6e71', fontSize: '0.85rem', minWidth: 70, flexShrink: 0 }}>{e.name}</span>
+                  {!selectedExtraField && <span style={{ background: '#eef2d0', padding: '2px 8px', borderRadius: 4, fontSize: '0.8rem', color: '#a8ba20', flexShrink: 0 }}>{shortLabel(e.field)}</span>}
+                  <span style={{ fontWeight: 500 }}>{e.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {feedbacks.length > 0 && (
         <div className="chart-card" style={{ marginTop: 24, overflowX: 'auto' }}>
