@@ -50,6 +50,11 @@ export function parseExcelFile(file) {
         const colInfo = classifyColumns(headers);
         const fileDate = extractDateFromFilename(file.name);
 
+        // Detect course name from first row to build batch label
+        const firstRow = rows[0];
+        const courseName = String(firstRow['課程'] || firstRow['上課時段'] || '').trim();
+        const batchLabel = courseName || `${fileDate} - ${file.name}`;
+
         const records = rows.map((row, i) => {
           const ratings = {};
           colInfo.ratingCols.forEach(col => {
@@ -70,6 +75,7 @@ export function parseExcelFile(file) {
           return {
             id: Date.now() + i + Math.random(),
             date: fileDate,
+            batch: batchLabel,
             name: String(row['姓名'] ?? '未知').trim(),
             group: String(row['參加組別'] ?? '').trim(),
             course: String(row['課程'] || row['上課時段'] || '').trim(),
@@ -79,7 +85,7 @@ export function parseExcelFile(file) {
 
         const existing = readData();
         writeData([...existing, ...records]);
-        resolve({ count: records.length, date: fileDate });
+        resolve({ count: records.length, date: fileDate, batch: batchLabel });
       } catch (err) { reject(err.message); }
     };
     reader.onerror = () => reject('檔案讀取失敗');
@@ -87,20 +93,20 @@ export function parseExcelFile(file) {
   });
 }
 
-export function getDates() {
+export function getBatches() {
   const data = readData();
-  return [...new Set(data.map(item => item.date))].sort();
+  return [...new Set(data.map(item => item.batch))].sort();
 }
 
-export function getFeedbacks(date, group) {
+export function getFeedbacks(batch, group) {
   let data = readData();
-  if (date) data = data.filter(item => item.date === date);
+  if (batch) data = data.filter(item => item.batch === batch);
   if (group) data = data.filter(item => item.group === group);
   return data;
 }
 
-export function getStats(date, group) {
-  const filtered = getFeedbacks(date, group);
+export function getStats(batch, group) {
+  const filtered = getFeedbacks(batch, group);
   if (filtered.length === 0) {
     return { total: 0, groups: {}, ratingAvg: {}, distribution: {}, overallAvg: 0, suggestions: [], extras: [] };
   }

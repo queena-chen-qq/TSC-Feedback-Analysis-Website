@@ -4,7 +4,7 @@ import {
   CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler
 } from 'chart.js';
 import { Pie, Bar, Radar } from 'react-chartjs-2';
-import { parseExcelFile, getDates, getFeedbacks, getStats, clearData } from './storage.js';
+import { parseExcelFile, getBatches, getFeedbacks, getStats, clearData } from './storage.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler);
 
@@ -18,8 +18,8 @@ function shortLabel(col) {
 }
 
 export default function App() {
-  const [dates, setDates] = useState([]);
-  const [selectedDate, setSelectedDate] = useState('');
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groups, setGroups] = useState([]);
   const [stats, setStats] = useState(null);
@@ -27,27 +27,27 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
 
-  const refresh = (date, group) => {
-    const d = date || selectedDate;
+  const refresh = (batch, group) => {
+    const b = batch || selectedBatch;
     const g = group !== undefined ? group : selectedGroup;
-    const s = getStats(d, g);
+    const s = getStats(b, g);
     setStats(s);
-    setFeedbacks(getFeedbacks(d, g));
+    setFeedbacks(getFeedbacks(b, g));
     if (!g && s.groups) setGroups(Object.keys(s.groups));
   };
 
-  const refreshDates = () => {
-    const d = getDates();
-    setDates(d);
-    return d;
+  const refreshBatches = () => {
+    const b = getBatches();
+    setBatches(b);
+    return b;
   };
 
   useEffect(() => {
-    const d = refreshDates();
-    if (d.length > 0) { setSelectedDate(d[0]); refresh(d[0], ''); }
+    const b = refreshBatches();
+    if (b.length > 0) { setSelectedBatch(b[0]); refresh(b[0], ''); }
   }, []);
 
-  useEffect(() => { if (selectedDate) refresh(selectedDate, selectedGroup); }, [selectedDate, selectedGroup]);
+  useEffect(() => { if (selectedBatch) refresh(selectedBatch, selectedGroup); }, [selectedBatch, selectedGroup]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -56,9 +56,9 @@ export default function App() {
     setUploading(true); setMessage('');
     try {
       const result = await parseExcelFile(fi.files[0]);
-      setMessage(`成功匯入 ${result.count} 筆回饋 (${result.date})`);
-      const nd = refreshDates();
-      if (nd.length > 0) { setSelectedGroup(''); setSelectedDate(nd[0]); refresh(nd[0], ''); }
+      setMessage(`成功匯入 ${result.count} 筆回饋 (${result.batch})`);
+      const nb = refreshBatches();
+      if (nb.length > 0) { setSelectedGroup(''); setSelectedBatch(nb[nb.length - 1]); refresh(nb[nb.length - 1], ''); }
     } catch (err) { setMessage(typeof err === 'string' ? err : '匯入失敗'); }
     setUploading(false); fi.value = '';
   };
@@ -66,7 +66,7 @@ export default function App() {
   const handleClear = () => {
     if (!confirm('確定要清除所有資料嗎？')) return;
     clearData();
-    setDates([]); setSelectedDate(''); setSelectedGroup(''); setGroups([]);
+    setBatches([]); setSelectedBatch(''); setSelectedGroup(''); setGroups([]);
     setStats(null); setFeedbacks([]); setMessage('資料已清除');
   };
 
@@ -108,11 +108,11 @@ export default function App() {
         {message && <span style={{ color: '#4361ee', fontWeight: 500 }}>{message}</span>}
       </form>
 
-      {dates.length > 0 && (
+      {batches.length > 0 && (
         <div className="controls">
-          <label htmlFor="date-select">選擇日期：</label>
-          <select id="date-select" value={selectedDate} onChange={e => { setSelectedGroup(''); setSelectedDate(e.target.value); }}>
-            {dates.map(d => <option key={d} value={d}>{d}</option>)}
+          <label htmlFor="batch-select">選擇課程：</label>
+          <select id="batch-select" value={selectedBatch} onChange={e => { setSelectedGroup(''); setSelectedBatch(e.target.value); }}>
+            {batches.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <label htmlFor="group-select">篩選組別：</label>
           <select id="group-select" value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
@@ -239,7 +239,7 @@ export default function App() {
         </div>
       )}
 
-      {dates.length === 0 && (
+      {batches.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
           <p style={{ fontSize: '1.2rem' }}>尚無資料，請先匯入 Excel 檔案</p>
           <p style={{ marginTop: 8, fontSize: '0.9rem' }}>支援自動偵測欄位格式，資料儲存在瀏覽器中</p>
