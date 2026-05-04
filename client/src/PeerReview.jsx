@@ -279,17 +279,6 @@ export default function PeerReview() {
                 </div>
               )}
 
-              {/* Line: trend */}
-              {lineData && (
-                <div className="chart-card" style={{ marginBottom: 24 }}>
-                  <h3>📈 歷次分數趨勢</h3>
-                  <Line data={lineData} options={{
-                    scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } },
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } } }
-                  }} />
-                </div>
-              )}
-
               {/* Table: overview */}
               <div className="chart-card" style={{ overflowX: 'auto' }}>
                 <h3>📋 各堂課平均分數</h3>
