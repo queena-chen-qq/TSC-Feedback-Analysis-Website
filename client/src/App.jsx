@@ -254,14 +254,15 @@ export default function App() {
       })()}
 
       {feedbacks.length > 0 && (
-        <div className="chart-card" style={{ marginTop: 24, overflowX: 'auto', maxHeight: 500, overflowY: 'auto' }}>
-          <h3 style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 2, paddingBottom: 8, paddingTop: 4, margin: 0 }}>📋 個人填答明細</h3>
+        <div className="chart-card-scroll" style={{ marginTop: 24 }}>
+          <h3 style={{ position: 'sticky', top: 0, background: '#fff', zIndex: 3, paddingBottom: 8, margin: 0 }}>📋 個人填答明細</h3>
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
-            <thead style={{ position: 'sticky', top: 32, zIndex: 2 }}>
-              <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left', background: '#fff' }}>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>姓名</th>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>組別</th>
-                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de' }}>{shortLabel(k)}</th>)}
+            <thead style={{ position: 'sticky', top: 30, zIndex: 2 }}>
+              <tr>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>姓名</th>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>組別</th>
+                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>{shortLabel(k)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -277,6 +278,7 @@ export default function App() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

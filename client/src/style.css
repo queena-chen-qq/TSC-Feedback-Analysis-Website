@@ -136,12 +136,20 @@ header h1 {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  max-height: 320px;
-  overflow: auto;
 }
 
 .chart-card canvas {
   max-height: 250px !important;
+}
+
+.chart-card-scroll {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  max-height: 520px;
+  overflow: auto;
+  position: relative;
 }
 
 .chart-card h3 {
