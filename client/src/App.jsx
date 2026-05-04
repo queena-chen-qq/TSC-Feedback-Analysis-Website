@@ -5,6 +5,7 @@ import {
 } from 'chart.js';
 import { Pie, Bar, Radar } from 'react-chartjs-2';
 import { parseExcelFile, getBatches, getFeedbacks, getStats, clearData } from './storage.js';
+import PeerReview from './PeerReview.jsx';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler);
 
@@ -18,6 +19,7 @@ function shortLabel(col) {
 }
 
 export default function App() {
+  const [page, setPage] = useState('feedback');
   const [batches, setBatches] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('');
@@ -97,9 +99,30 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1>📊 崇越雲拓計畫課程回饋分析</h1>
+        <div style={{ display: 'flex', gap: 4, background: '#e0e0de', borderRadius: 8, padding: 3 }}>
+          <button
+            onClick={() => setPage('feedback')}
+            style={{
+              padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500,
+              background: page === 'feedback' ? '#c2d530' : 'transparent',
+              color: page === 'feedback' ? '#fff' : '#6d6e71'
+            }}
+          >課程回饋</button>
+          <button
+            onClick={() => setPage('peer')}
+            style={{
+              padding: '8px 16px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500,
+              background: page === 'peer' ? '#c2d530' : 'transparent',
+              color: page === 'peer' ? '#fff' : '#6d6e71'
+            }}
+          >各組互評</button>
+        </div>
       </header>
+
+      {page === 'peer' ? <PeerReview /> : (
+      <>
 
       <form className="upload-section" onSubmit={handleUpload}>
         <input type="file" accept=".xlsx,.xls,.csv" aria-label="選擇 Excel 檔案" />
@@ -259,6 +282,8 @@ export default function App() {
           <p style={{ fontSize: '1.2rem' }}>尚無資料，請先匯入 Excel 檔案</p>
           <p style={{ marginTop: 8, fontSize: '0.9rem' }}>支援自動偵測欄位格式，資料儲存在瀏覽器中</p>
         </div>
+      )}
+      </>
       )}
     </div>
   );
