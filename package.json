@@ -5,7 +5,7 @@
   "scripts": {
     "dev:server": "node server/index.js",
     "dev:client": "vite",
-    "build": "vite build"
+    "build": "node ./node_modules/vite/bin/vite.js build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^6.0.1",
