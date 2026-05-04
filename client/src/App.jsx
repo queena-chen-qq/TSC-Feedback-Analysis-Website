@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,
   CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler
 } from 'chart.js';
 import { Pie, Bar, Radar } from 'react-chartjs-2';
+import { parseExcelFile, getDates, getFeedbacks, getStats, clearData } from './storage.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, RadialLinearScale, PointElement, LineElement, Filler);
 
@@ -13,66 +14,60 @@ const COLORS_SAT = {
 const PALETTE = ['#4361ee','#7209b7','#f72585','#4cc9f0','#3a0ca3','#560bad','#e63946','#2dc653'];
 
 function shortLabel(col) {
-  return col
-    .replace('課程安排 - ', '').replace('講師授課情形 - ', '')
-    .replace('課程難易度 - ', '難易度: ');
+  return col.replace('課程安排 - ', '').replace('講師授課情形 - ', '').replace('課程難易度 - ', '難易度: ');
 }
 
 export default function App() {
   const [dates, setDates] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [groups, setGroups] = useState([]);
   const [stats, setStats] = useState(null);
   const [feedbacks, setFeedbacks] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [groups, setGroups] = useState([]);
 
-  const fetchDates = useCallback(async () => {
-    const res = await fetch('/api/dates');
-    const data = await res.json();
-    setDates(data);
-    return data;
-  }, []);
+  const refresh = (date, group) => {
+    const d = date || selectedDate;
+    const g = group !== undefined ? group : selectedGroup;
+    const s = getStats(d, g);
+    setStats(s);
+    setFeedbacks(getFeedbacks(d, g));
+    if (!g && s.groups) setGroups(Object.keys(s.groups));
+  };
 
-  const fetchData = useCallback(async (date, group) => {
-    let q = date ? `?date=${encodeURIComponent(date)}` : '';
-    if (group) q += `${q ? '&' : '?'}group=${encodeURIComponent(group)}`;
-    const [sRes, fRes] = await Promise.all([fetch(`/api/stats${q}`), fetch(`/api/feedbacks${q}`)]);
-    const statsData = await sRes.json();
-    setStats(statsData);
-    setFeedbacks(await fRes.json());
-    // Update available groups from unfiltered date data
-    if (!group && statsData.groups) {
-      setGroups(Object.keys(statsData.groups));
-    }
-  }, []);
+  const refreshDates = () => {
+    const d = getDates();
+    setDates(d);
+    return d;
+  };
 
   useEffect(() => {
-    fetchDates().then(d => { if (d.length > 0) { setSelectedDate(d[0]); fetchData(d[0], ''); } });
-  }, [fetchDates, fetchData]);
+    const d = refreshDates();
+    if (d.length > 0) { setSelectedDate(d[0]); refresh(d[0], ''); }
+  }, []);
 
-  useEffect(() => { if (selectedDate) fetchData(selectedDate, selectedGroup); }, [selectedDate, selectedGroup, fetchData]);
+  useEffect(() => { if (selectedDate) refresh(selectedDate, selectedGroup); }, [selectedDate, selectedGroup]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
     const fi = e.target.querySelector('input[type="file"]');
     if (!fi.files[0]) return;
     setUploading(true); setMessage('');
-    const fd = new FormData(); fd.append('file', fi.files[0]);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      setMessage(res.ok ? data.message : (data.error || '上傳失敗'));
-      if (res.ok) { const nd = await fetchDates(); if (nd.length > 0) { setSelectedGroup(''); setSelectedDate(nd[0]); fetchData(nd[0], ''); } }
-    } catch { setMessage('上傳失敗，請確認伺服器是否啟動'); }
+      const result = await parseExcelFile(fi.files[0]);
+      setMessage(`成功匯入 ${result.count} 筆回饋 (${result.date})`);
+      const nd = refreshDates();
+      if (nd.length > 0) { setSelectedGroup(''); setSelectedDate(nd[0]); refresh(nd[0], ''); }
+    } catch (err) { setMessage(typeof err === 'string' ? err : '匯入失敗'); }
     setUploading(false); fi.value = '';
   };
 
-  const handleClear = async () => {
+  const handleClear = () => {
     if (!confirm('確定要清除所有資料嗎？')) return;
-    await fetch('/api/feedbacks', { method: 'DELETE' });
-    setDates([]); setSelectedDate(''); setSelectedGroup(''); setGroups([]); setStats(null); setFeedbacks([]); setMessage('資料已清除');
+    clearData();
+    setDates([]); setSelectedDate(''); setSelectedGroup(''); setGroups([]);
+    setStats(null); setFeedbacks([]); setMessage('資料已清除');
   };
 
   const ratingKeys = stats?.ratingAvg ? Object.keys(stats.ratingAvg) : [];
@@ -95,7 +90,6 @@ export default function App() {
     }]
   } : null;
 
-  // Get all rating column keys from feedbacks for the detail table
   const allRatingKeys = feedbacks.length > 0
     ? [...new Set(feedbacks.flatMap(f => Object.keys(f.ratings || {})))]
     : [];
@@ -164,9 +158,7 @@ export default function App() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
-                    <th style={{ padding: 8 }}>項目</th>
-                    <th style={{ padding: 8 }}>平均分</th>
-                    <th style={{ padding: 8 }}>評價</th>
+                    <th style={{ padding: 8 }}>項目</th><th style={{ padding: 8 }}>平均分</th><th style={{ padding: 8 }}>評價</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -228,9 +220,7 @@ export default function App() {
               <tr style={{ borderBottom: '2px solid #eee', textAlign: 'left' }}>
                 <th style={{ padding: 6, whiteSpace: 'nowrap' }}>姓名</th>
                 <th style={{ padding: 6, whiteSpace: 'nowrap' }}>組別</th>
-                {allRatingKeys.map(k => (
-                  <th key={k} style={{ padding: 6, whiteSpace: 'nowrap' }}>{shortLabel(k)}</th>
-                ))}
+                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap' }}>{shortLabel(k)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -240,11 +230,7 @@ export default function App() {
                   <td style={{ padding: 6 }}>{f.group}</td>
                   {allRatingKeys.map(k => {
                     const r = f.ratings?.[k];
-                    return (
-                      <td key={k} style={{ padding: 6, color: COLORS_SAT[r?.label] || '#333', fontWeight: 500 }}>
-                        {r?.label || '-'}
-                      </td>
-                    );
+                    return <td key={k} style={{ padding: 6, color: COLORS_SAT[r?.label] || '#333', fontWeight: 500 }}>{r?.label || '-'}</td>;
                   })}
                 </tr>
               ))}
@@ -256,7 +242,7 @@ export default function App() {
       {dates.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
           <p style={{ fontSize: '1.2rem' }}>尚無資料，請先匯入 Excel 檔案</p>
-          <p style={{ marginTop: 8, fontSize: '0.9rem' }}>支援自動偵測欄位格式</p>
+          <p style={{ marginTop: 8, fontSize: '0.9rem' }}>支援自動偵測欄位格式，資料儲存在瀏覽器中</p>
         </div>
       )}
     </div>
