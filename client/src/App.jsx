@@ -16,6 +16,10 @@ const COLORS_SAT = {
 const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28'];
 
 function shortLabel(col) {
+  // Extract the last meaningful part after " - "
+  const parts = col.split(' - ');
+  const last = parts[parts.length - 1].trim();
+  if (parts.length > 1 && last) return last;
   return col.replace('課程安排 - ', '').replace('講師授課情形 - ', '').replace('課程難易度 - ', '難易度: ');
 }
 
