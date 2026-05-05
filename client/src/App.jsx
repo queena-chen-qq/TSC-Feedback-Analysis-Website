@@ -281,14 +281,17 @@ export default function App() {
         });
 
         const filterSelect = (key, options) => (
-          <select
-            value={columnFilters[key] || ''}
-            onChange={e => setColumnFilters(prev => ({ ...prev, [key]: e.target.value }))}
-            style={{ padding: '0 2px', fontSize: '0.7rem', border: 'none', background: 'transparent', color: columnFilters[key] ? '#a8ba20' : '#999', cursor: 'pointer', width: 16 }}
-          >
-            <option value="">▼</option>
-            {options.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
+          <span style={{ position: 'relative', display: 'inline-block', marginLeft: 4, verticalAlign: 'middle' }}>
+            <span style={{ fontSize: '0.6rem', color: columnFilters[key] ? '#a8ba20' : '#bbb' }}>▾</span>
+            <select
+              value={columnFilters[key] || ''}
+              onChange={e => setColumnFilters(prev => ({ ...prev, [key]: e.target.value }))}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }}
+            >
+              <option value="">全部</option>
+              {options.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </span>
         );
 
         return (
