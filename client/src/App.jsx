@@ -16,9 +16,6 @@ const COLORS_SAT = {
 const PALETTE = ['#c2d530','#a8ba20','#6d6e71','#8faa1b','#4a4b4d','#d4c85a','#3a3a3a','#b8cc28'];
 
 function shortLabel(col) {
-  // Take only the last part after the last " - "
-  const parts = col.split(' - ');
-  if (parts.length > 1) return parts[parts.length - 1];
   return col.replace('課程安排 - ', '').replace('講師授課情形 - ', '').replace('課程難易度 - ', '難易度: ');
 }
 
@@ -287,9 +284,9 @@ export default function App() {
           <select
             value={columnFilters[key] || ''}
             onChange={e => setColumnFilters(prev => ({ ...prev, [key]: e.target.value }))}
-            style={{ width: '100%', padding: '3px 4px', fontSize: '0.75rem', border: '1px solid #e0e0de', borderRadius: 4, background: columnFilters[key] ? '#eef2d0' : '#fff' }}
+            style={{ padding: '0 2px', fontSize: '0.7rem', border: 'none', background: 'transparent', color: columnFilters[key] ? '#a8ba20' : '#999', cursor: 'pointer', width: 16 }}
           >
-            <option value="">全部</option>
+            <option value="">▼</option>
             {options.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
         );
@@ -309,14 +306,15 @@ export default function App() {
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
               <tr>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>姓名</th>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>組別</th>
-                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>{shortLabel(k)}</th>)}
-              </tr>
-              <tr style={{ background: '#fafafa' }}>
-                <th style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}></th>
-                <th style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}>{filterSelect('組別', groupOptions)}</th>
-                {allRatingKeys.map(k => <th key={k} style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}>{filterSelect(k, ratingOptions[k] || [])}</th>)}
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>姓名</th>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>
+                  組別 {filterSelect('組別', groupOptions)}
+                </th>
+                {allRatingKeys.map(k => (
+                  <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>
+                    {shortLabel(k)} {filterSelect(k, ratingOptions[k] || [])}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
