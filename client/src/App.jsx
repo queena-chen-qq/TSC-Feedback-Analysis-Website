@@ -32,6 +32,7 @@ export default function App() {
   const [selectedExtraField, setSelectedExtraField] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [detailFilter, setDetailFilter] = useState('');
+  const [columnFilters, setColumnFilters] = useState({});
 
   const refresh = async (batch, group) => {
     const b = batch || selectedBatch;
@@ -264,35 +265,55 @@ export default function App() {
       })()}
 
       {feedbacks.length > 0 && (() => {
-        const filtered = detailFilter
-          ? feedbacks.filter(f =>
-              f.name.includes(detailFilter) ||
-              f.group.includes(detailFilter) ||
-              Object.values(f.ratings || {}).some(r => r.label.includes(detailFilter))
-            )
-          : feedbacks;
+        const filtered = feedbacks.filter(f => {
+          if (columnFilters['組別'] && f.group !== columnFilters['組別']) return false;
+          for (const k of allRatingKeys) {
+            if (columnFilters[k] && f.ratings?.[k]?.label !== columnFilters[k]) return false;
+          }
+          return true;
+        });
+
+        // Get unique values for each column
+        const groupOptions = [...new Set(feedbacks.map(f => f.group).filter(Boolean))];
+        const ratingOptions = {};
+        allRatingKeys.forEach(k => {
+          ratingOptions[k] = [...new Set(feedbacks.map(f => f.ratings?.[k]?.label).filter(v => v && v !== '未填'))];
+        });
+
+        const filterSelect = (key, options) => (
+          <select
+            value={columnFilters[key] || ''}
+            onChange={e => setColumnFilters(prev => ({ ...prev, [key]: e.target.value }))}
+            style={{ width: '100%', padding: '3px 4px', fontSize: '0.75rem', border: '1px solid #e0e0de', borderRadius: 4, background: columnFilters[key] ? '#eef2d0' : '#fff' }}
+          >
+            <option value="">全部</option>
+            {options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        );
+
         return (
         <div style={{ marginTop: 24 }}>
-          <div className="chart-card" style={{ borderRadius: '12px 12px 0 0', paddingBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+          <div className="chart-card" style={{ borderRadius: '12px 12px 0 0', paddingBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ margin: 0 }}>📋 個人填答明細</h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                type="text"
-                placeholder="搜尋姓名、組別或滿意度..."
-                value={detailFilter}
-                onChange={e => setDetailFilter(e.target.value)}
-                style={{ padding: '6px 12px', border: '1px solid #e0e0de', borderRadius: 8, fontSize: '0.85rem', width: 200 }}
-              />
-              <span style={{ color: '#6d6e71', fontSize: '0.8rem' }}>{filtered.length} 筆</span>
+              {Object.values(columnFilters).some(v => v) && (
+                <button onClick={() => setColumnFilters({})} style={{ padding: '4px 10px', fontSize: '0.8rem', border: 'none', borderRadius: 4, background: '#e0e0de', color: '#6d6e71', cursor: 'pointer' }}>清除篩選</button>
+              )}
+              <span style={{ color: '#6d6e71', fontSize: '0.8rem' }}>{filtered.length}/{feedbacks.length} 筆</span>
             </div>
           </div>
-          <div style={{ background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', maxHeight: 480, overflowY: 'auto', overflowX: 'auto' }}>
+          <div style={{ background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', maxHeight: 520, overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 2 }}>
               <tr>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>姓名</th>
-                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>組別</th>
-                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '2px solid #e0e0de', textAlign: 'left' }}>{shortLabel(k)}</th>)}
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>姓名</th>
+                <th style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>組別</th>
+                {allRatingKeys.map(k => <th key={k} style={{ padding: 6, whiteSpace: 'nowrap', background: '#fff', borderBottom: '1px solid #e0e0de', textAlign: 'left' }}>{shortLabel(k)}</th>)}
+              </tr>
+              <tr style={{ background: '#fafafa' }}>
+                <th style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}></th>
+                <th style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}>{filterSelect('組別', groupOptions)}</th>
+                {allRatingKeys.map(k => <th key={k} style={{ padding: 4, background: '#fafafa', borderBottom: '2px solid #e0e0de' }}>{filterSelect(k, ratingOptions[k] || [])}</th>)}
               </tr>
             </thead>
             <tbody>
