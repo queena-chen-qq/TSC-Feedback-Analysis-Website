@@ -31,6 +31,7 @@ export default function App() {
   const [message, setMessage] = useState('');
   const [selectedExtraField, setSelectedExtraField] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [detailFilter, setDetailFilter] = useState('');
 
   const refresh = async (batch, group) => {
     const b = batch || selectedBatch;
@@ -262,10 +263,28 @@ export default function App() {
         );
       })()}
 
-      {feedbacks.length > 0 && (
+      {feedbacks.length > 0 && (() => {
+        const filtered = detailFilter
+          ? feedbacks.filter(f =>
+              f.name.includes(detailFilter) ||
+              f.group.includes(detailFilter) ||
+              Object.values(f.ratings || {}).some(r => r.label.includes(detailFilter))
+            )
+          : feedbacks;
+        return (
         <div style={{ marginTop: 24 }}>
-          <div className="chart-card" style={{ borderRadius: '12px 12px 0 0', paddingBottom: 0 }}>
-            <h3>📋 個人填答明細</h3>
+          <div className="chart-card" style={{ borderRadius: '12px 12px 0 0', paddingBottom: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <h3 style={{ margin: 0 }}>📋 個人填答明細</h3>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="搜尋姓名、組別或滿意度..."
+                value={detailFilter}
+                onChange={e => setDetailFilter(e.target.value)}
+                style={{ padding: '6px 12px', border: '1px solid #e0e0de', borderRadius: 8, fontSize: '0.85rem', width: 200 }}
+              />
+              <span style={{ color: '#6d6e71', fontSize: '0.8rem' }}>{filtered.length} 筆</span>
+            </div>
           </div>
           <div style={{ background: '#fff', borderRadius: '0 0 12px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', maxHeight: 480, overflowY: 'auto', overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: '0.9rem' }}>
@@ -277,7 +296,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {feedbacks.map(f => (
+              {filtered.map(f => (
                 <tr key={f.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                   <td style={{ padding: 6 }}>{f.name}</td>
                   <td style={{ padding: 6 }}>{f.group}</td>
@@ -291,7 +310,8 @@ export default function App() {
           </table>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {batches.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>
